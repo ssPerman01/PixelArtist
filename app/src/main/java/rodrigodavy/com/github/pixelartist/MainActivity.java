@@ -4,17 +4,18 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.ColorDrawable;
-import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore.Images.Media;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -27,6 +28,7 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.BufferedReader;
@@ -46,20 +48,46 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.GravityCompat;
 import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import butterknife.BindView;
+import butterknife.ButterKnife;
+import butterknife.OnClick;
+import pixelartist.utils.Constants;
+import pixelartist.view.adapter.ColorBoxAdapter;
+
+import static pixelartist.utils.Constants.SPLIT_REGEX;
+import static pixelartist.utils.Constants.ZOOM_MAX;
+import static pixelartist.utils.Constants.ZOOM_MIN;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String SETTINGS_GRID = "grid";
-    private static final String URL_ABOUT = "https://github.com/RodrigoDavy/PixelArtist/blob/master/README.md";
-    private static final int MY_REQUEST_WRITE_STORAGE = 5;
+    String TAG = this.getClass().getSimpleName();
+
+    @BindView(R.id.paper_linear_layout)     LinearLayout paper;
+    @BindView(R.id.tv_size_broad)           TextView tvSizeBroad;
+    @BindView(R.id.v_curr_color)            View vCurrColorSelected;
+    @BindView(R.id.view_color)              RecyclerView rcvColor;
+    @BindView(R.id.drawer_layout)           DrawerLayout drawerLayout;
+
+    private static final String SETTINGS_GRID   = "grid";
+    private static final String SETTINGS_COLORS = "colors";
+    private static final String URL_ABOUT = "https://github.com/ssPerman01/PixelArtist/blob/master/README.md";
+
+    private static final int MY_REQUEST_WRITE_STORAGE   = 5;
+    private static final int RC_ADD_COLOR               = 1;
+
     private final ArrayList<DrawerMenuItem> listMenuItem = new ArrayList<>();
     private int currentColor;
-    private Button colorButtons[];
-    private int colors[];
+    private List<Integer> arrColor;
     private ActionBarDrawerToggle drawerToggle;
     private SharedPreferences settings;
     private boolean grid;
+    private boolean isOpenDrawerToggle = false;
+
+    private ColorBoxAdapter colorBoxAdapter;
 
     /**
      * Converts a file to a content uri, by inserting it into the media store.
@@ -80,13 +108,25 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.drawer_layout);
 
-        DrawerLayout drawerLayout = findViewById(R.id.drawer_layout);
+        ButterKnife.bind(this);
+        zoomUtils = new ZoomUtils();
+
+        settings = getPreferences(0);
+
+//        DrawerLayout drawerLayout = findViewById(R.id.drawer_layout);
         drawerToggle = new ActionBarDrawerToggle(this, drawerLayout,
                 R.string.drawer_open, R.string.drawer_close) {
             @Override
             public void onDrawerOpened(View drawerView) {
                 super.onDrawerOpened(drawerView);
                 updateDrawerHeader();
+                isOpenDrawerToggle = true;
+            }
+
+            @Override
+            public void onDrawerClosed(View drawerView) {
+                super.onDrawerClosed(drawerView);
+                isOpenDrawerToggle = false;
             }
         };
 
@@ -110,18 +150,22 @@ public class MainActivity extends AppCompatActivity {
         leftDrawer.setOnItemClickListener((adapterView, view, i, l) -> listMenuItem.get(i).execute());
 
         initPalette();
-        initPixels();
-        fillScreen(ContextCompat.getColor(MainActivity.this, R.color.white));
 
-        settings = getPreferences(0);
-        grid = settings.getBoolean(SETTINGS_GRID, true);
-
-        if (!grid) {
-            grid = true;
-            pixelGrid();
+        if (haveTempFile()) {
+            openFile(Constants.FILE_TEMP_EXTENSION, false);
         }
+        else {
+            initPixelGird();
+            fillScreen(ContextCompat.getColor(MainActivity.this, R.color.white));
 
-        openFile(".tmp", false);
+
+            grid = settings.getBoolean(SETTINGS_GRID, true);
+
+            if (!grid) {
+                grid = true;
+                pixelGrid();
+            }
+        }
     }
 
     @Override
@@ -134,7 +178,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onStop() {
         super.onStop();
 
-        saveFile(".tmp", false);
+        saveFile(Constants.FILE_TEMP_EXTENSION, false);
         SharedPreferences.Editor editor = settings.edit();
         editor.putBoolean(SETTINGS_GRID, grid);
         editor.apply();
@@ -144,21 +188,32 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
 
-        if (requestCode == 1) {
+        if (requestCode == RC_ADD_COLOR) {
             if (resultCode == Activity.RESULT_OK) {
-                Button b = findViewById(data.getIntExtra("id", 0));
-                GradientDrawable gd = (GradientDrawable) b.getBackground();
                 int c = data.getIntExtra("color", 0);
-                gd.setColor(c);
-
-                colors[data.getIntExtra("position", 0)] = c;
-
-                if (data.getBooleanExtra("currentColor", false)) {
-                    currentColor = c;
-                    findViewById(R.id.palette_linear_layout).setBackgroundColor(currentColor);
-                }
+                arrColor.add(c);
+                colorBoxAdapter.notifyDataSetChanged();
+                saveColors();
             }
         }
+    }
+
+    long lastTimeBackPress = 0;
+    @Override
+    public void onBackPressed() {
+        if (isOpenDrawerToggle) {
+            drawerLayout.closeDrawer(GravityCompat.START);
+        }
+        else {
+            if (lastTimeBackPress == 0 || System.currentTimeMillis() - lastTimeBackPress > 1500) {
+                showToast(R.string.toast_confirm_quit, Toast.LENGTH_LONG);
+            }
+            else {
+                super.onBackPressed();
+            }
+            lastTimeBackPress = System.currentTimeMillis();
+        }
+
     }
 
     private void addDrawerItems() {
@@ -166,7 +221,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void execute() {
                 final AlertDialog alertDialog = new AlertDialog.Builder(MainActivity.this).create();
-                final View v = findViewById(R.id.color_button_white);
+//                final View v = findViewById(R.id.color_button_white);
 
                 alertDialog.setTitle(getString(R.string.alert_dialog_title_new));
                 alertDialog.setMessage(getString(R.string.alert_dialog_message_new));
@@ -196,21 +251,21 @@ public class MainActivity extends AppCompatActivity {
                     builder.setTitle(R.string.menu_open);
 
                     for (File file : files) {
-                        if (file.getName().contains(".pixel_artist")) {
-                            list.add(0, file.getName().replace(".pixel_artist", ""));
+                        if (file.getName().contains(Constants.FILE_EXTENSION)) {
+                            list.add(0, file.getName().replace(Constants.FILE_EXTENSION, ""));
                         }
                     }
 
                     final CharSequence[] charSequences = list.toArray(new CharSequence[0]);
 
                     builder.setItems(charSequences, (dialogInterface, i) -> {
-                        openFile(charSequences[i].toString() + ".pixel_artist", true);
+                        openFile(charSequences[i].toString() + Constants.FILE_EXTENSION, true);
                         updateDrawerHeader();
                     });
                     builder.show();
-                } else {
-                    Toast toast = Toast.makeText(MainActivity.this, R.string.file_no_files_found, Toast.LENGTH_LONG);
-                    toast.show();
+                }
+                else {
+                    showToast(R.string.file_no_files_found, Toast.LENGTH_LONG);
                 }
             }
         };
@@ -229,7 +284,7 @@ public class MainActivity extends AppCompatActivity {
                             EditText editText = alertDialog.findViewById(R.id.dialog_filename_edit_text);
                             String filename = null;
                             if (editText != null) {
-                                filename = editText.getText() + ".pixel_artist";
+                                filename = editText.getText() + Constants.FILE_EXTENSION;
                             }
                             saveFile(filename, true);
                         });
@@ -254,7 +309,7 @@ public class MainActivity extends AppCompatActivity {
                         + calendar.get(Calendar.MONTH)
                         + calendar.get(Calendar.DAY_OF_MONTH) + "_" + unixTime + ".jpg";
 
-                screenShot(findViewById(R.id.paper_linear_layout), filename);
+                screenShot(paper, filename);
             }
         };
 
@@ -275,6 +330,11 @@ public class MainActivity extends AppCompatActivity {
         listMenuItem.add(drawerAbout);
     }
 
+    private void showToast(int p, int lengthLong) {
+        Toast toast = Toast.makeText(MainActivity.this, p, lengthLong);
+        toast.show();
+    }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         MenuInflater inflater = getMenuInflater();
@@ -284,15 +344,15 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle item selection
-        final AlertDialog alertDialog = new AlertDialog.Builder(MainActivity.this).create();
-
         if (drawerToggle.onOptionsItemSelected(item)) {
             return true;
         }
 
+        // Handle item selection
+
         switch (item.getItemId()) {
             case R.id.menu_fill:
+                final AlertDialog alertDialog = new AlertDialog.Builder(MainActivity.this).create();
                 alertDialog.setTitle(getString(R.string.alert_dialog_title_fill));
                 alertDialog.setMessage(getString(R.string.alert_dialog_message_fill));
                 alertDialog.setButton(AlertDialog.BUTTON_POSITIVE, getString(android.R.string.ok),
@@ -314,6 +374,36 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private boolean haveTempFile() {
+        File imageFolder = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        File openFile = new File(imageFolder, Constants.FILE_TEMP_EXTENSION);
+
+        try {
+            BufferedReader bufferedReader = new BufferedReader(new FileReader(openFile));
+            String value;
+
+            int widthTemp, heightTemp;
+
+            if ((value = bufferedReader.readLine()) != null) {
+                widthTemp = Integer.valueOf(value);
+            }
+            else {
+                throw new IOException();
+            }
+
+            if ((value = bufferedReader.readLine()) != null) {
+                heightTemp = Integer.valueOf(value);
+            }
+            else {
+                throw new IOException();
+            }
+
+            return widthTemp > 0 && heightTemp > 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public void openFile(String fileName, boolean showToast) {
         File imageFolder = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
         File openFile = new File(imageFolder, fileName);
@@ -323,52 +413,61 @@ public class MainActivity extends AppCompatActivity {
             int color;
             String value;
 
-            int x, y;
+            int widthTemp, heightTemp;
 
             if ((value = bufferedReader.readLine()) != null) {
-                x = Integer.valueOf(value);
-            } else {
+                widthTemp = Integer.valueOf(value);
+            }
+            else {
                 throw new IOException();
             }
 
             if ((value = bufferedReader.readLine()) != null) {
-                y = Integer.valueOf(value);
-            } else {
+                heightTemp = Integer.valueOf(value);
+            }
+            else {
                 throw new IOException();
             }
+
+            width = widthTemp;
+            height = heightTemp;
+
+            initPixelGird();
 
             LinearLayout linearLayout = findViewById(R.id.paper_linear_layout);
 
-            for (int i = 0; i < x; i++) {
-                for (int j = 0; j < y; j++) {
+//            Log.i(TAG, "openFile: --widthTemp="+widthTemp+" --heightTemp="+heightTemp);
+            for (int i = 0; i < heightTemp; i++) {
+                for (int j = 0; j < widthTemp; j++) {
 
                     if ((value = bufferedReader.readLine()) != null) {
                         color = Integer.valueOf(value);
-                    } else {
+                    }
+                    else {
                         throw new IOException();
                     }
-
-                    View v = ((LinearLayout) linearLayout.getChildAt(i)).getChildAt(j);
-                    v.setBackgroundColor(color);
+//                    Log.i(TAG, "openFile: --i="+i+" --j="+j);
+//                    View v = ((LinearLayout) linearLayout.getChildAt(i)).getChildAt(j);
+//                    v.setBackgroundColor(color);
+                    ((LinearLayout) linearLayout.getChildAt(i)).getChildAt(j).setBackgroundColor(color);
                 }
             }
 
+            showSizeBroad();
+
             if (showToast) {
-                Toast toast = Toast.makeText(this, R.string.file_opened, Toast.LENGTH_SHORT);
-                toast.show();
+                showToast(R.string.file_opened, Toast.LENGTH_SHORT);
             }
 
         } catch (FileNotFoundException e) {
             Log.e("MainActivity.openFile", "File not found");
             if (showToast) {
-                Toast toast = Toast.makeText(this, R.string.file_not_found, Toast.LENGTH_LONG);
-                toast.show();
+                showToast(R.string.file_not_found, Toast.LENGTH_LONG);
             }
         } catch (IOException e) {
             Log.e("MainActivity.openFile", "Could not open file");
             if (showToast) {
-                Toast toast = Toast.makeText(this, R.string.file_could_not_open, Toast.LENGTH_LONG);
-                toast.show();
+                showToast(R.string.file_could_not_open, Toast.LENGTH_LONG);
             }
         }
     }
@@ -381,17 +480,23 @@ public class MainActivity extends AppCompatActivity {
         File imageFolder = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
         File saveFile = new File(imageFolder, fileName);
 
+        
         try {
             if (!saveFile.exists()) {
                 saveFile.createNewFile();
             }
 
+//            Log.i(TAG, "saveFile: w="+width+" h="+height);
             FileWriter fileWriter = new FileWriter(saveFile);
-            fileWriter.append("16\n16\n");
+            fileWriter.append(String.valueOf(width))
+                    .append("\n")
+                    .append(String.valueOf(height))
+                    .append("\n");
+//            fileWriter.append("16\n16\n");
 
             LinearLayout linearLayout = findViewById(R.id.paper_linear_layout);
-            for (int i = 0; i < 16; i++) {
-                for (int j = 0; j < 16; j++) {
+            for (int i = 0; i < height; i++) {
+                for (int j = 0; j < width; j++) {
                     View v = ((LinearLayout) linearLayout.getChildAt(i)).getChildAt(j);
                     int color = ((ColorDrawable) v.getBackground()).getColor();
                     fileWriter.append(String.valueOf(color));
@@ -402,15 +507,13 @@ public class MainActivity extends AppCompatActivity {
             fileWriter.close();
 
             if (showToast) {
-                Toast toast = Toast.makeText(this, R.string.toast_saved, Toast.LENGTH_SHORT);
-                toast.show();
+                showToast(R.string.toast_saved, Toast.LENGTH_SHORT);
             }
         } catch (IOException e) {
             Log.e("MainActivity.saveFile", "File not found");
 
             if (showToast) {
-                Toast toast = Toast.makeText(this, R.string.toast_not_saved, Toast.LENGTH_LONG);
-                toast.show();
+                showToast(R.string.toast_not_saved, Toast.LENGTH_LONG);
             }
         }
     }
@@ -425,7 +528,6 @@ public class MainActivity extends AppCompatActivity {
                     MY_REQUEST_WRITE_STORAGE);
 
             return;
-
         }
 
         Bitmap bitmap = Bitmap.createBitmap(view.getWidth(),
@@ -469,9 +571,9 @@ public class MainActivity extends AppCompatActivity {
             } catch (IOException e) {
                 Log.e(MainActivity.class.getName(), "IOException related to generating bitmap file");
             }
-        } else {
-            Toast toast = Toast.makeText(this, R.string.toast_could_not_create_app_folder, Toast.LENGTH_LONG);
-            toast.show();
+        }
+        else {
+            showToast(R.string.toast_could_not_create_app_folder, Toast.LENGTH_LONG);
         }
     }
 
@@ -497,7 +599,8 @@ public class MainActivity extends AppCompatActivity {
                     // permission was granted
                     // can run additional stuff here
                     Toast.makeText(this, R.string.write_permission_granted, Toast.LENGTH_LONG).show();
-                } else {
+                }
+                else {
                     // permission denied
                     Toast.makeText(this, R.string.write_permission_unavailable, Toast.LENGTH_LONG).show();
                 }
@@ -510,149 +613,215 @@ public class MainActivity extends AppCompatActivity {
         return !Environment.MEDIA_MOUNTED.equals(state);
     }
 
+    //update preview picture in LeftMenu
     private void updateDrawerHeader() {
-        View view = findViewById(R.id.paper_linear_layout);
-        Bitmap bitmap = Bitmap.createBitmap(view.getWidth(),
-                view.getHeight(), Bitmap.Config.ARGB_8888);
+//        View paper = findViewById(R.id.paper_linear_layout);
+        Bitmap bitmap = Bitmap.createBitmap(paper.getWidth(),
+                paper.getHeight(), Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        view.draw(canvas);
+        paper.draw(canvas);
 
         ImageView header = findViewById(R.id.drawer_header);
         header.setImageBitmap(bitmap);
     }
 
     private void initPalette() {
-        colorButtons = new Button[]{
-                findViewById(R.id.color_button_black),
-                findViewById(R.id.color_button_eclipse),
-                findViewById(R.id.color_button_grey),
-                findViewById(R.id.color_button_silver),
-                findViewById(R.id.color_button_white),
+        arrColor = new ArrayList<>();
 
-                findViewById(R.id.color_button_red),
-                findViewById(R.id.color_button_vermilion),
-                findViewById(R.id.color_button_orange),
-                findViewById(R.id.color_button_amber),
-                findViewById(R.id.color_button_yellow),
-                findViewById(R.id.color_button_lime),
-                findViewById(R.id.color_button_chartreuse),
-                findViewById(R.id.color_button_harlequin),
-                findViewById(R.id.color_button_green),
-                findViewById(R.id.color_button_malachite),
-                findViewById(R.id.color_button_mint),
-                findViewById(R.id.color_button_turquoise),
-                findViewById(R.id.color_button_cyan),
-                findViewById(R.id.color_button_sky_blue),
-                findViewById(R.id.color_button_azure),
-                findViewById(R.id.color_button_sapphire),
-                findViewById(R.id.color_button_blue),
-                findViewById(R.id.color_button_indigo),
-                findViewById(R.id.color_button_purple),
-                findViewById(R.id.color_button_lt_purple),
-                findViewById(R.id.color_button_magenta),
-                findViewById(R.id.color_button_fuchsia),
-                findViewById(R.id.color_button_rose),
-                findViewById(R.id.color_button_carmine)
-        };
-
-        colors = new int[]{
-                ContextCompat.getColor(this, R.color.black),
-                ContextCompat.getColor(this, R.color.eclipse),
-                ContextCompat.getColor(this, R.color.grey),
-                ContextCompat.getColor(this, R.color.silver),
-                ContextCompat.getColor(this, R.color.white),
-
-                ContextCompat.getColor(this, R.color.red),
-                ContextCompat.getColor(this, R.color.vermilion),
-                ContextCompat.getColor(this, R.color.orange),
-                ContextCompat.getColor(this, R.color.amber),
-                ContextCompat.getColor(this, R.color.yellow),
-                ContextCompat.getColor(this, R.color.lime),
-                ContextCompat.getColor(this, R.color.chartreuse),
-                ContextCompat.getColor(this, R.color.harlequin),
-                ContextCompat.getColor(this, R.color.green),
-                ContextCompat.getColor(this, R.color.malachite),
-                ContextCompat.getColor(this, R.color.mint),
-                ContextCompat.getColor(this, R.color.turquoise),
-                ContextCompat.getColor(this, R.color.cyan),
-                ContextCompat.getColor(this, R.color.sky_blue),
-                ContextCompat.getColor(this, R.color.azure),
-                ContextCompat.getColor(this, R.color.sapphire),
-                ContextCompat.getColor(this, R.color.blue),
-                ContextCompat.getColor(this, R.color.indigo),
-                ContextCompat.getColor(this, R.color.purple),
-                ContextCompat.getColor(this, R.color.lt_purple),
-                ContextCompat.getColor(this, R.color.magenta),
-                ContextCompat.getColor(this, R.color.fuchsia),
-                ContextCompat.getColor(this, R.color.rose),
-                ContextCompat.getColor(this, R.color.carmine)
-        };
-
-        for (int i = 0; i < colorButtons.length; i++) {
-
-            GradientDrawable cd = (GradientDrawable) colorButtons[i].getBackground();
-            cd.setColor(colors[i]);
-
-            colorButtons[i].setOnLongClickListener(view -> {
-                int n = 0;
-
-                for (Button b : colorButtons) {
-                    if (view.getId() == b.getId()) {
-                        break;
-                    }
-
-                    n += 1;
-                }
-
-                Intent i1 = new Intent(MainActivity.this, ColorSelector.class);
-                i1.putExtra("id", view.getId());
-                i1.putExtra("position", n);
-                i1.putExtra("color", colors[n]);
-
-                if (colors[n] == currentColor) {
-                    i1.putExtra("currentColor", true);
-                } else {
-                    i1.putExtra("currentColor", false);
-                }
-                startActivityForResult(i1, 1);
-
-                return false;
-            });
-        }
-
-        selectColor(colorButtons[0]);
-    }
-
-    //Initializes the "pixels" (basically sets OnLongClickListener on them)
-    private void initPixels() {
-        LinearLayout paper = findViewById(R.id.paper_linear_layout);
-
-        for (int i = 0; i < paper.getChildCount(); i++) {
-            LinearLayout l = (LinearLayout) paper.getChildAt(i);
-
-            for (int j = 0; j < l.getChildCount(); j++) {
-                View pixel = l.getChildAt(j);
-
-                //Sets OnLongCLickListener to be able to select current color based on that pixel's color
-                pixel.setOnLongClickListener(view -> {
-                    selectColor(((ColorDrawable) view.getBackground()).getColor());
-                    return false;
-                });
+        // check have add new color
+        String colorsSave = settings.getString(SETTINGS_COLORS, "");
+        if (!TextUtils.isEmpty(colorsSave)) {
+            String[] arrTemp = colorsSave.split(SPLIT_REGEX);
+            for (String item : arrTemp) {
+                arrColor.add(Integer.parseInt(item));
             }
         }
+        else {
+            arrColor.add(ContextCompat.getColor(this, R.color.black));
+            arrColor.add(ContextCompat.getColor(this, R.color.eclipse));
+            arrColor.add(ContextCompat.getColor(this, R.color.grey));
+            arrColor.add(ContextCompat.getColor(this, R.color.silver));
+            arrColor.add(ContextCompat.getColor(this, R.color.white));
+            arrColor.add(ContextCompat.getColor(this, R.color.red));
+            arrColor.add(ContextCompat.getColor(this, R.color.vermilion));
+            arrColor.add(ContextCompat.getColor(this, R.color.orange));
+            arrColor.add(ContextCompat.getColor(this, R.color.amber));
+            arrColor.add(ContextCompat.getColor(this, R.color.yellow));
+            arrColor.add(ContextCompat.getColor(this, R.color.lime));
+            arrColor.add(ContextCompat.getColor(this, R.color.chartreuse));
+            arrColor.add(ContextCompat.getColor(this, R.color.harlequin));
+            arrColor.add(ContextCompat.getColor(this, R.color.green));
+            arrColor.add(ContextCompat.getColor(this, R.color.malachite));
+            arrColor.add(ContextCompat.getColor(this, R.color.mint));
+            arrColor.add(ContextCompat.getColor(this, R.color.turquoise));
+            arrColor.add(ContextCompat.getColor(this, R.color.cyan));
+            arrColor.add(ContextCompat.getColor(this, R.color.sky_blue));
+            arrColor.add(ContextCompat.getColor(this, R.color.azure));
+            arrColor.add(ContextCompat.getColor(this, R.color.sapphire));
+            arrColor.add(ContextCompat.getColor(this, R.color.blue));
+            arrColor.add(ContextCompat.getColor(this, R.color.indigo));
+            arrColor.add(ContextCompat.getColor(this, R.color.purple));
+            arrColor.add(ContextCompat.getColor(this, R.color.lt_purple));
+            arrColor.add(ContextCompat.getColor(this, R.color.magenta));
+            arrColor.add(ContextCompat.getColor(this, R.color.fuchsia));
+            arrColor.add(ContextCompat.getColor(this, R.color.rose));
+            arrColor.add(ContextCompat.getColor(this, R.color.carmine));
+        }
+
+        
+
+        colorBoxAdapter = new ColorBoxAdapter(arrColor, (position, obj) -> selectColor(obj));
+        rcvColor.setAdapter(colorBoxAdapter);
+
+        GridLayoutManager gridLayoutManager = new GridLayoutManager(this, 2, RecyclerView.HORIZONTAL, false);
+        rcvColor.setLayoutManager(gridLayoutManager);
+
+        selectColor(arrColor.get(0));
+    }
+
+    @OnClick({R.id.view_zoom_in})
+    protected void onClickZoomIn() {
+        if (zoomUtils.currZoom >= ZOOM_MAX) {
+            showToast(R.string.toast_zoom_in_max, Toast.LENGTH_SHORT);
+        }
+        else {
+            zoomUtils.zoomByDirection(paper, 1);
+        }
+    }
+
+    @OnClick({R.id.view_zoom_out})
+    protected void onClickZoomOut() {
+        if (zoomUtils.currZoom <= ZOOM_MIN) {
+            showToast(R.string.toast_zoom_out_min, Toast.LENGTH_SHORT);
+        }
+        else {
+            zoomUtils.zoomByDirection(paper, -1);
+        }
+    }
+
+    @OnClick({R.id.v_add_color})
+    protected void onClickAddColor() {
+        Intent i1 = new Intent(MainActivity.this, ColorSelector.class);
+        startActivityForResult(i1, RC_ADD_COLOR);
+    }
+
+    @OnClick({R.id.new_paper})
+    protected void onClickNewPaper() {
+        showDialogNewPaper();
+    }
+
+    private void showDialogNewPaper() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+        LayoutInflater layoutInflater = LayoutInflater.from(this);
+
+        builder.setTitle(getString(R.string.new_paper));
+        View dialogView = layoutInflater.inflate(R.layout.dialog_new_paper, null);
+        builder.setView(dialogView);
+
+
+        builder.setNegativeButton(getString(android.R.string.cancel), (dialog, which) -> dialog.dismiss());
+
+        EditText edtWidth = dialogView.findViewById(R.id.edt_width);
+        EditText edtHeight = dialogView.findViewById(R.id.edt_height);
+        if (edtWidth != null) {
+            edtWidth.setText(String.valueOf(width));
+        }
+        if (edtHeight != null) {
+            edtHeight.setText(String.valueOf(height));
+        }
+        builder.setPositiveButton(getString(android.R.string.ok),
+                (dialog, which) -> {
+                });
+        final AlertDialog alertDialog = builder.create();
+        alertDialog.setCancelable(false);
+        alertDialog.setOnShowListener(dialogInterface -> {
+            Button b = alertDialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            b.setOnClickListener(view -> {
+                boolean isOk = true;
+                String widthTemp = edtWidth.getText().toString();
+                String heightTemp = edtHeight.getText().toString();
+                if (TextUtils.isEmpty(widthTemp) || widthTemp.equals("0") || !TextUtils.isDigitsOnly(widthTemp)) {
+                    edtWidth.setError(getString(R.string.wrong_input_width));
+                    isOk = false;
+                }
+                if (TextUtils.isEmpty(heightTemp) || heightTemp.equals("0") || !TextUtils.isDigitsOnly(heightTemp)) {
+                    edtHeight.setError(getString(R.string.wrong_input_height));
+                    isOk = false;
+                }
+                if (isOk) {
+                    width = Integer.parseInt(widthTemp);
+                    height= Integer.parseInt(heightTemp);
+                    grid = false;
+                    paper.removeAllViews();
+                    initPixelGird();
+                    showSizeBroad();
+                    alertDialog.dismiss();
+                }
+            });
+        });
+        alertDialog.show();
+    }
+
+    private void showSizeBroad() {
+        tvSizeBroad.setText(getString(R.string.size_broad, width, height));
+    }
+
+    ZoomUtils zoomUtils;
+    int width = 3;
+    int height = 3;
+
+    private void initPixelGird() {
+
+        int x;
+        if (grid) {
+            x = 0;
+        }
+        else {
+            x = 1;
+        }
+
+        zoomUtils.currZoom = getResources().getDimensionPixelSize(R.dimen.pixel_width);
+        
+        LayoutInflater inflater = getLayoutInflater();
+        for (int i = 0; i < height; i++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            for (int j = 0; j < width; j++) {
+                row.addView(initViewPixel(inflater, x));
+            }
+            paper.addView(row);
+        }
+    }
+
+    private TextView initViewPixel(LayoutInflater inflater, int margin) {
+        TextView pixel = (TextView) inflater.inflate(R.layout.view_pixel, null);
+
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(getResources().getDimensionPixelSize(R.dimen.pixel_width), getResources().getDimensionPixelSize(R.dimen.pixel_width));
+        layoutParams.setMargins(margin, margin, 0, 0);
+        pixel.setLayoutParams(layoutParams);
+
+        pixel.setBackgroundColor(ContextCompat.getColor(this, R.color.white));
+
+
+        //Sets OnLongCLickListener to be able to select current color based on that pixel's color
+        pixel.setOnLongClickListener(view -> {
+            selectColor(((ColorDrawable) view.getBackground()).getColor());
+            return false;
+        });
+        return pixel;
     }
 
     //Shows or hides the pixels boundaries from the paper_linear_layout
     private void pixelGrid() {
-        LinearLayout paper = findViewById(R.id.paper_linear_layout);
-
         int x;
         int y;
 
         if (grid) {
             x = 0;
             y = 0;
-        } else {
+        }
+        else {
             x = 1;
             y = 1;
         }
@@ -675,8 +844,6 @@ public class MainActivity extends AppCompatActivity {
 
     //Fills paper_linear_layout with chosen color
     private void fillScreen(int color) {
-        LinearLayout paper = findViewById(R.id.paper_linear_layout);
-
         for (int i = 0; i < paper.getChildCount(); i++) {
             LinearLayout l = (LinearLayout) paper.getChildAt(i);
 
@@ -688,26 +855,22 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    //On click method that selects the current color based on the palette button pressed
-    public void selectColor(View v) {
-        int i = 0;
-
-        for (Button b : colorButtons) {
-            if (v.getId() == b.getId()) {
-                break;
-            }
-
-            i += 1;
-        }
-
-        selectColor(colors[i]);
-    }
-
     //Sets the current color based on the "color" argument
     public void selectColor(int color) {
         currentColor = color;
 
-        findViewById(R.id.palette_linear_layout).setBackgroundColor(currentColor);
+        vCurrColorSelected.setBackgroundColor(currentColor);
+    }
+
+    public void saveColors() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < arrColor.size(); i++) {
+            sb.append(arrColor.get(i)).append(i==arrColor.size()-1?"":SPLIT_REGEX);
+        }
+
+        SharedPreferences.Editor editor = settings.edit();
+        editor.putString(SETTINGS_COLORS, sb.toString());
+        editor.apply();
     }
 
     //Onclick method that changes the color of a single "pixel"

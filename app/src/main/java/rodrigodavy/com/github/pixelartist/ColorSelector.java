@@ -28,11 +28,11 @@ public class ColorSelector extends AppCompatActivity {
         returnIntent.putExtra("id", returnId);
         returnIntent.putExtra("currentColor", currentColor);
 
-        if (returnId == 0) {
-            setResult(ColorSelector.RESULT_CANCELED, returnIntent);
-        } else {
+//        if (returnId == 0) {
+//            setResult(ColorSelector.RESULT_CANCELED, returnIntent);
+//        } else {
             setResult(ColorSelector.RESULT_OK, returnIntent);
-        }
+//        }
 
         finish();
     }

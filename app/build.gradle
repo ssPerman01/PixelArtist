@@ -5,11 +5,11 @@ android {
     buildToolsVersion '28.0.3'
 
     defaultConfig {
-        applicationId "rodrigodavy.com.github.pixelartist"
+        applicationId "com.pps.pixelartist"
         minSdkVersion 16
         targetSdkVersion 28
-        versionCode 4
-        versionName "3.1"
+        versionCode 1
+        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -38,11 +38,14 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
 
     implementation 'androidx.annotation:annotation:1.1.0-alpha01'
-    implementation 'androidx.appcompat:appcompat:1.1.0-alpha01'
+    implementation 'androidx.appcompat:appcompat:1.1.0-alpha02'
     implementation 'androidx.constraintlayout:constraintlayout:2.0.0-alpha3'
     implementation 'androidx.core:core:1.1.0-alpha04'
     implementation 'androidx.drawerlayout:drawerlayout:1.0.0'
 
+    implementation 'com.jakewharton:butterknife:10.1.0'
+    annotationProcessor 'com.jakewharton:butterknife-compiler:10.1.0'
+    
     testImplementation 'junit:junit:4.13-beta-1'
     androidTestImplementation 'androidx.test:runner:1.1.2-alpha01'
 }

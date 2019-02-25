@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--size pixel-->
+    <dimen name="pixel_width">40dp</dimen>
+    <dimen name="pixel_height">40dp</dimen>
+
+    <!--current color select-->
+    <dimen name="curr_color_width">30dp</dimen>
+    <dimen name="curr_color_height">60dp</dimen>
+
+    <dimen name="item_color_width">30dp</dimen>
+
+    <dimen name="add_color_width">35dp</dimen>
+
+    <dimen name="corner_item">2dp</dimen>
+
+    <!--padding-->
+    <dimen name="padding_quarter_item">3dp</dimen>
+    <dimen name="padding_half_item">5dp</dimen>
+    <dimen name="padding_item">10dp</dimen>
+    <dimen name="padding_medium">15dp</dimen>
+    <dimen name="padding_high">20dp</dimen>
+    <dimen name="padding_large">25dp</dimen>
+    <dimen name="padding_huge">26dp</dimen>
+
+</resources>
