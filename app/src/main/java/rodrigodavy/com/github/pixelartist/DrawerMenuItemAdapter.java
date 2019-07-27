@@ -14,8 +14,11 @@ import androidx.annotation.Nullable;
 
 public class DrawerMenuItemAdapter extends ArrayAdapter<DrawerMenuItem> {
 
+    Context context;
+
     DrawerMenuItemAdapter(@NonNull Context context, @NonNull ArrayList<DrawerMenuItem> objects) {
         super(context, 0, objects);
+        this.context = context;
     }
 
     @NonNull
@@ -23,8 +26,7 @@ public class DrawerMenuItemAdapter extends ArrayAdapter<DrawerMenuItem> {
     public View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
         View listItemView = convertView;
         if (listItemView == null) {
-            listItemView = LayoutInflater.from(getContext()).inflate(
-                    R.layout.drawer_list_item, parent, false);
+            listItemView = LayoutInflater.from(context).inflate(R.layout.drawer_list_item, parent, false);
         }
 
         DrawerMenuItem drawerMenuItem = getItem(position);

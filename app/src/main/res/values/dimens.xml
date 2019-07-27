@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--size pixel-->
-    <dimen name="pixel_width">40dp</dimen>
-    <dimen name="pixel_height">40dp</dimen>
+    <dimen name="pixel_width">30dp</dimen>
+    <dimen name="pixel_height">30dp</dimen>
 
     <!--current color select-->
     <dimen name="curr_color_width">30dp</dimen>

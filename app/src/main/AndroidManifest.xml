@@ -13,6 +13,15 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         tools:ignore="GoogleAppIndexingWarning">
+
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="${enable_crashlytics}" />
+
+        <meta-data
+            android:name="com.google.android.gms.ads.AD_MANAGER_APP"
+            android:value="true"/>
+
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|keyboardHidden"

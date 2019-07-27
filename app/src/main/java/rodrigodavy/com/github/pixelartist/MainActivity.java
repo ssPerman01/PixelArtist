@@ -1,15 +1,14 @@
 package rodrigodavy.com.github.pixelartist;
 
 import android.Manifest;
-import android.app.Activity;
 import android.content.ContentResolver;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
@@ -31,6 +30,9 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.jaredrummler.android.colorpicker.ColorPickerDialog;
+import com.jaredrummler.android.colorpicker.ColorPickerDialogListener;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -40,6 +42,8 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 import androidx.appcompat.app.ActionBar;
@@ -62,7 +66,7 @@ import static pixelartist.utils.Constants.SPLIT_REGEX;
 import static pixelartist.utils.Constants.ZOOM_MAX;
 import static pixelartist.utils.Constants.ZOOM_MIN;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements ColorPickerDialogListener {
 
     String TAG = this.getClass().getSimpleName();
 
@@ -84,9 +88,13 @@ public class MainActivity extends AppCompatActivity {
     private List<Integer> arrColor;
     private ActionBarDrawerToggle drawerToggle;
     private SharedPreferences settings;
-    private boolean grid;
+    private boolean grid = true;
     private boolean isOpenDrawerToggle = false;
 
+    private int width = 15;
+    private int height = 15;
+
+    private ZoomUtils zoomUtils;
     private ColorBoxAdapter colorBoxAdapter;
 
     /**
@@ -155,16 +163,19 @@ public class MainActivity extends AppCompatActivity {
             openFile(Constants.FILE_TEMP_EXTENSION, false);
         }
         else {
-            initPixelGird();
-            fillScreen(ContextCompat.getColor(MainActivity.this, R.color.white));
 
+            showDialogNewPaper(getString(R.string.create_new_paper));
 
-            grid = settings.getBoolean(SETTINGS_GRID, true);
-
-            if (!grid) {
-                grid = true;
-                pixelGrid();
-            }
+//            initPixelGird();
+//            fillScreen(ContextCompat.getColor(MainActivity.this, R.color.white));
+//
+//            showSizeBroad();
+//            grid = settings.getBoolean(SETTINGS_GRID, true);
+//            Log.i(TAG, "onCreate: gird="+grid);
+//            if (!grid) {
+//                grid = true;
+//                pixelGrid();
+//            }
         }
     }
 
@@ -188,14 +199,18 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
 
-        if (requestCode == RC_ADD_COLOR) {
-            if (resultCode == Activity.RESULT_OK) {
-                int c = data.getIntExtra("color", 0);
-                arrColor.add(c);
-                colorBoxAdapter.notifyDataSetChanged();
-                saveColors();
-            }
-        }
+//        if (requestCode == RC_ADD_COLOR) {
+//            if (resultCode == Activity.RESULT_OK) {
+//                int c = data.getIntExtra("color", 0);
+//                addColor(c);
+//            }
+//        }
+    }
+
+    private void addColor(int c) {
+        arrColor.add(c);
+        colorBoxAdapter.notifyDataSetChanged();
+        saveColors();
     }
 
     long lastTimeBackPress = 0;
@@ -497,6 +512,9 @@ public class MainActivity extends AppCompatActivity {
             LinearLayout linearLayout = findViewById(R.id.paper_linear_layout);
             for (int i = 0; i < height; i++) {
                 for (int j = 0; j < width; j++) {
+                    if (linearLayout.getChildAt(i) == null || ((LinearLayout) linearLayout.getChildAt(i)).getChildAt(j) == null) {
+                        continue;
+                    }
                     View v = ((LinearLayout) linearLayout.getChildAt(i)).getChildAt(j);
                     int color = ((ColorDrawable) v.getBackground()).getColor();
                     fileWriter.append(String.valueOf(color));
@@ -701,16 +719,20 @@ public class MainActivity extends AppCompatActivity {
 
     @OnClick({R.id.v_add_color})
     protected void onClickAddColor() {
-        Intent i1 = new Intent(MainActivity.this, ColorSelector.class);
-        startActivityForResult(i1, RC_ADD_COLOR);
+        ColorPickerDialog.newBuilder()
+                .setDialogType(ColorPickerDialog.TYPE_CUSTOM)
+                .setAllowPresets(false)
+                .setColor(Color.BLACK)
+                .setShowAlphaSlider(false)
+                .show(this);
     }
 
     @OnClick({R.id.new_paper})
     protected void onClickNewPaper() {
-        showDialogNewPaper();
+        showDialogNewPaper(null);
     }
 
-    private void showDialogNewPaper() {
+    private void showDialogNewPaper(String detail) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
 
         LayoutInflater layoutInflater = LayoutInflater.from(this);
@@ -721,6 +743,11 @@ public class MainActivity extends AppCompatActivity {
 
 
         builder.setNegativeButton(getString(android.R.string.cancel), (dialog, which) -> dialog.dismiss());
+
+        if (!TextUtils.isDigitsOnly(detail)) {
+            TextView tvDetail = dialogView.findViewById(R.id.tv_detail);
+            tvDetail.setText(detail);
+        }
 
         EditText edtWidth = dialogView.findViewById(R.id.edt_width);
         EditText edtHeight = dialogView.findViewById(R.id.edt_height);
@@ -752,7 +779,7 @@ public class MainActivity extends AppCompatActivity {
                 if (isOk) {
                     width = Integer.parseInt(widthTemp);
                     height= Integer.parseInt(heightTemp);
-                    grid = false;
+                    grid = true;
                     paper.removeAllViews();
                     initPixelGird();
                     showSizeBroad();
@@ -767,14 +794,10 @@ public class MainActivity extends AppCompatActivity {
         tvSizeBroad.setText(getString(R.string.size_broad, width, height));
     }
 
-    ZoomUtils zoomUtils;
-    int width = 3;
-    int height = 3;
-
     private void initPixelGird() {
 
         int x;
-        if (grid) {
+        if (!grid) {
             x = 0;
         }
         else {
@@ -816,8 +839,10 @@ public class MainActivity extends AppCompatActivity {
     private void pixelGrid() {
         int x;
         int y;
+        Log.i(TAG, "pixelGrid: grid="+grid);
+        grid = !grid;
 
-        if (grid) {
+        if (!grid) {
             x = 0;
             y = 0;
         }
@@ -825,8 +850,6 @@ public class MainActivity extends AppCompatActivity {
             x = 1;
             y = 1;
         }
-
-        grid = !grid;
 
         for (int i = 0; i < paper.getChildCount(); i++) {
             LinearLayout l = (LinearLayout) paper.getChildAt(i);
@@ -876,5 +899,21 @@ public class MainActivity extends AppCompatActivity {
     //Onclick method that changes the color of a single "pixel"
     public void changeColor(View v) {
         v.setBackgroundColor(currentColor);
+    }
+
+    @Override
+    public void onColorSelected(int dialogId, int color) {
+        if (arrColor.contains(color)) {
+            showToast(R.string.toast_duplicate_color, Toast.LENGTH_SHORT);
+        }
+        else {
+            addColor(color);
+            selectColor(color);
+        }
+    }
+
+    @Override
+    public void onDialogDismissed(int dialogId) {
+
     }
 }

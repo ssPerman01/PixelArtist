@@ -94,9 +94,12 @@
         <TextView
             android:id="@+id/tv_size_broad"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:padding="10dp"
-            tools:text="Size: 20x20"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textSize="13sp"
+            android:layout_marginLeft="@dimen/padding_half_item"
+            android:layout_marginRight="@dimen/padding_half_item"
+            tools:text="Size:\n20x20"
             />
 
         <TextView
@@ -104,7 +107,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:padding="@dimen/padding_item"
-            android:text="New Size"
+            android:text="@string/btn_new_paper"
             android:background="@drawable/btn_white_corner"
             />
         <TextView
@@ -112,7 +115,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:padding="10dp"
-            android:text="Zoom in"
+            android:text="@string/zoom_in"
             android:layout_marginLeft="@dimen/padding_item"
             android:background="@drawable/btn_white_corner"
             />
@@ -122,7 +125,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:padding="10dp"
-            android:text="Zoom out"
+            android:text="@string/zoom_out"
             android:layout_marginLeft="@dimen/padding_item"
             android:background="@drawable/btn_white_corner"
             />

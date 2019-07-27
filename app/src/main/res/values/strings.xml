@@ -36,6 +36,7 @@
     <string name="toast_confirm_quit">Press back again to quit!</string>
     <string name="toast_zoom_out_min">Can not zoom out(very small)!</string>
     <string name="toast_zoom_in_max">Can not zoom in(very big)!</string>
+    <string name="toast_duplicate_color">Color is exist!</string>
 
     <!-- Files -->
     <string name="file_name">Filename</string>
@@ -56,15 +57,19 @@
     <string name="error_something_went_wrong">Something went wrong</string>
 
     <!--function-->
-    <string name="size_broad" translatable="false">Size: %dx%d</string>
+    <string name="size_broad" translatable="false">Size:\n%dx%d</string>
 
 
     <string name="new_paper">New Paper</string>
     <string name="confirm_create_new_paper">Create new paper:\n(Please save before create new file, because all pixels will clear)</string>
+    <string name="create_new_paper">Create new paper:</string>
     <string name="width">Width</string>
     <string name="height">Height</string>
 
     <string name="wrong_input_width">Please input width</string>
     <string name="wrong_input_height">Please input height</string>
+    <string name="btn_new_paper">New Paper</string>
+    <string name="zoom_in">Zoom In</string>
+    <string name="zoom_out">Zoom Out</string>
 
 </resources>
